@@ -35,13 +35,41 @@ instance Alternative Parser where
     p1 input <|> p2 input
 
 jsonValue :: Parser JsonValue
-jsonValue = jsonNull <|> jsonBool <|> jsonNumber <|> jsonString
+jsonValue = jsonNull <|> 
+            jsonBool <|> 
+            jsonNumber <|> 
+            jsonString <|> 
+            jsonArray <|> 
+            jsonObject
+
+jsonObject :: Parser JsonValue
+jsonObject = 
+  JsonObject <$> (charP '{' *> ws *> sepBy (ws *> charP ',' <* ws) pair <* ws <* charP '}')
+  where 
+    pair = 
+      (\key _ value -> (key, value)) <$> stringLiteral <*> 
+      (ws *> charP ':' *> ws) <*> 
+      jsonValue
+
+
+sepBy :: Parser a -> Parser b -> Parser [b]
+sepBy sep elem = (:) <$> elem <*> many (sep *> elem) <|> pure []
+
+ws :: Parser String
+ws = spanP isSpace
+
+jsonArray :: Parser JsonValue
+jsonArray = JsonArray <$> ( charP '[' *> ws *>
+                            elements 
+                            <* ws <* charP ']' )
+
+  where elements = sepBy ( ws *> charP ',' <* ws ) jsonValue
 
 jsonString :: Parser JsonValue
 jsonString = JsonString <$> (charP '"' *> stringLiteral <* charP '"')
 
 stringLiteral :: Parser String
-stringLiteral = spanP (/= '"')
+stringLiteral = charP '"' *> spanP (/= '"') <* charP '"'
 
 jsonNumber :: Parser JsonValue
 jsonNumber = f <$> notNullP (spanP isDigit)
@@ -78,6 +106,10 @@ charP x = Parser f
 stringP :: String -> Parser String
 stringP = sequenceA . map charP
 
+parseFile :: FilePath -> Parser a -> IO (Maybe a)
+parseFile fileName parser = do
+  input <- readFile fileName
+  return (snd <$> runParser parser input)
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"
