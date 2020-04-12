@@ -34,13 +34,25 @@ instance Alternative Parser where
   (Parser p1) <|> (Parser p2) = Parser $ \input -> 
     p1 input <|> p2 input
 
+jsonValue :: Parser JsonValue
+jsonValue = jsonNull <|> jsonBool <|> jsonNumber <|> jsonString
+
+jsonString :: Parser JsonValue
+jsonString = JsonString <$> (charP '"' *> stringLiteral <* charP '"')
+
+stringLiteral :: Parser String
+stringLiteral = spanP (/= '"')
 
 jsonNumber :: Parser JsonValue
-jsonNumber = f <$> spanP isDigit 
+jsonNumber = f <$> notNullP (spanP isDigit)
   where f ds = JsonNumber $ read ds
 
-jsonValue :: Parser JsonValue
-jsonValue = jsonNull <|> jsonBool <|> jsonNumber
+notNullP :: Parser [a] -> Parser [a]
+notNullP (Parser p) = Parser $ \input -> do
+  (input', xs) <- p input
+  if null xs
+    then Nothing
+    else Just (input', xs)
 
 jsonBool :: Parser JsonValue
 jsonBool = f <$> (stringP "true" <|> stringP "false")
